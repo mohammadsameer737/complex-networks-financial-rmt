@@ -1,5 +1,13 @@
 # Financial Correlation Networks & Random Matrix Theory (RMT)
 
+[![PyPI version](https://img.shields.io/badge/TestPyPI-v0.1.0-blue)](https://test.pypi.org/project/finnet-backbone/0.1.0/)
+
+## 📦 Package Installation
+The core backbone extraction and RMT modules are available as a standalone pip-installable package:
+
+```bash
+pip install -i https://test.pypi.org/simple/ finnet-backbone
+
 ## Project Overview
 This project analyzes S&P 500 stock correlations using Random Matrix Theory (RMT) 
 and extracts the multiscale network backbone using the Disparity Filter algorithm. 
