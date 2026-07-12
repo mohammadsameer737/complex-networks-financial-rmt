@@ -1,0 +1,19 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Data and Results (Keep these out of Git to keep the repo small)
+*.csv
+*.png
+sp500_10yr_cache.csv
+
+# OS files
+.DS_Store
+Thumbs.db
