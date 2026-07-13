@@ -1,18 +1,44 @@
-# Virtual environment
+# Virtual Environment
 .venv/
 venv/
-env/
+ENV/
 
-# Python cache files
+# Python cache and build artifacts
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Data and Results (Keep these out of Git to keep the repo small)
-*.csv
-*.png
-sp500_10yr_cache.csv
+# Testing and IDE
+.pytest_cache/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data and Generated Reports (Keep the structure, ignore the heavy files)
+data/*.csv
+data/*.npy
+reports/
+results/*.png
+results/*.json
 
 # OS files
 .DS_Store

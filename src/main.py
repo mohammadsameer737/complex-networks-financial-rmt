@@ -9,12 +9,12 @@ from scipy.linalg import eigh
 from scipy import integrate
 
 # Import custom modules
-from src.data_loader import load_market_data
-from src.rmt import mp_null_lambda_plus, identify_sector_modes
-from src.backbone import (disparity_filter_naive, disparity_null_fp_rate, bootstrap_backbone_prices,
+from src.finnet_backbone.data_loader import load_market_data
+from src.finnet_backbone.rmt import mp_null_lambda_plus, identify_sector_modes
+from src.finnet_backbone.backbone import (disparity_filter_naive, disparity_null_fp_rate, bootstrap_backbone_prices,
                           get_gcc_size, jaccard, safe_modularity, safe_algebraic_connectivity,
                           track_gcc_decay, robustness_curve_ensemble)
-from src.visualization import (plot_ipr, plot_parameter_sweep, plot_er_phase_transition,
+from src.finnet_backbone.visualization import (plot_ipr, plot_parameter_sweep, plot_er_phase_transition,
                                plot_jaccard_overlap, plot_backbone_comparison,
                                plot_perturbation_analysis, plot_robustness_comparison,
                                plot_rmt_spectrum, plot_network_backbone,

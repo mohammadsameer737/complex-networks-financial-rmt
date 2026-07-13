@@ -1,5 +1,5 @@
 import numpy as np
-from src.rmt import mp_null_lambda_plus, identify_sector_modes
+from src.finnet_backbone.rmt import mp_null_lambda_plus, identify_sector_modes
 
 def test_mp_null_lambda_plus():
     """Test MP null distribution generation."""

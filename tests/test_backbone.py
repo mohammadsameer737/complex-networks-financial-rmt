@@ -1,5 +1,5 @@
 import numpy as np
-from src.backbone import disparity_filter_naive, get_gcc_size
+from src.finnet_backbone.backbone import disparity_filter_naive, get_gcc_size
 import networkx as nx
 
 def test_disparity_filter_basic():
