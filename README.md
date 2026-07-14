@@ -24,13 +24,3 @@ global market noise to reveal underlying economic sector structures.
 python -m venv .venv
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
-
-## 🚀 Execution Modes
-
-This project offers two execution modes depending on the depth of analysis required:
-
-### 1. Core Workflow (Fast - ~5 mins)
-Runs the essential data pipeline, RMT filtering, backbone extraction, and robustness analysis. 
-Ideal for CI/CD testing and quick validation.
-```bash
-python pipeline.py
