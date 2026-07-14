@@ -1,8 +1,8 @@
 """
 Automated Workflow Orchestrator for Financial Network Analysis.
-Replaces external workflow managers (e.g., Snakemake) to ensure 
+Replaces external workflow managers to ensure 
 100% cross-platform compatibility without C-extension compilation issues.
-Module 3: Data pipelines and workflow automation.
+
 """
 import os
 import sys
