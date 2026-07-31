@@ -2,16 +2,24 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import random
+from typing import Dict, List, Tuple, Set
 
-def disparity_filter_naive(weight_matrix_pd, alpha=0.05):
+def disparity_filter_naive(weight_matrix: np.ndarray, alpha: float = 0.05) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extract the multiscale backbone using the Disparity Filter.
     
     Null hypothesis: The weights of a node's links are uniformly distributed 
     (equivalent to randomly splitting a unit segment into k_i parts).
     We keep an edge only if its weight is statistically significant at level alpha.
+    
+    Args:
+        weight_matrix: Symmetric weighted adjacency matrix.
+        alpha: Significance threshold (default: 0.05).
+        
+    Returns:
+        Tuple of (backbone matrix, p-value matrix).
     """
-    W = np.array(weight_matrix_pd, dtype=np.float64, copy=True)
+    W = np.array(weight_matrix, dtype=np.float64, copy=True)
     W = np.abs(W)
     np.fill_diagonal(W, 0.0)
     n = W.shape[0]
@@ -49,15 +57,14 @@ def disparity_filter_naive(weight_matrix_pd, alpha=0.05):
                 
     return backbone, pvals
 
-def disparity_null_fp_rate(returns_df, n_sims=50, alpha=0.05):
+def disparity_null_fp_rate(returns_df: pd.DataFrame, n_sims: int = 50, alpha: float = 0.05) -> Tuple[float, float]:
     """
     Estimate the false positive rate of the Disparity Filter on uncorrelated data.
     We shuffle the returns to destroy any real correlation, then apply the filter.
     """
-    Tn = returns_df.shape[0]
     fp_counts = []
     for _ in range(n_sims):
-        # Shuffle each column independently to break correlations
+        # Shuffle each column independently to break temporal and cross-sectional correlations
         shuffled = returns_df.apply(np.random.permutation)
         rho_sh = shuffled.corr().values.copy()  
         np.fill_diagonal(rho_sh, 0.0)
@@ -67,12 +74,13 @@ def disparity_null_fp_rate(returns_df, n_sims=50, alpha=0.05):
         G_sh.remove_nodes_from(list(nx.isolates(G_sh)))
         fp_counts.append(G_sh.number_of_edges())
         
-    return np.mean(fp_counts), np.std(fp_counts)
+    return float(np.mean(fp_counts)), float(np.std(fp_counts))
 
-def bootstrap_backbone_prices(prices_df, mapping, n_reps=200, block_size=5, alpha=0.05):
+def bootstrap_backbone_prices(prices_df: pd.DataFrame, mapping: Dict[int, str], n_reps: int = 200, block_size: int = 5, alpha: float = 0.05) -> Dict[Tuple[str, str], float]:
     """
     Assess edge stability using block bootstrap resampling.
-    This preserves short-term temporal correlations in the financial time series.
+    This preserves short-term temporal correlations in the financial time series,
+    unlike naive i.i.d. bootstrapping.
     """
     Tn = prices_df.shape[0]
     edges_counts = {}
@@ -105,7 +113,7 @@ def bootstrap_backbone_prices(prices_df, mapping, n_reps=200, block_size=5, alph
     survival = {e: edges_counts.get(e, 0) / n_reps for e in edges_counts}
     return survival
 
-def get_gcc_size(graph, N_global):
+def get_gcc_size(graph: nx.Graph, N_global: int) -> float:
     """
     Calculate the relative size of the Giant Connected Component (GCC).
     This is the primary order parameter for network connectivity and resilience.
@@ -114,41 +122,45 @@ def get_gcc_size(graph, N_global):
         return 0.0
     connected_components = list(nx.connected_components(graph))
     largest_cc = max(connected_components, key=len)
-    return len(largest_cc) / N_global
+    return float(len(largest_cc) / N_global)
 
-def jaccard(set1, set2):
-    """Calculate Jaccard similarity coefficient between two sets of edges."""
+def jaccard(set1: Set, set2: Set) -> float:
+    """
+    Calculate the Jaccard similarity coefficient between two sets of edges.
+    Measures topological overlap: J = |A ∩ B| / |A ∪ B|. 
+    Returns 0.0 if both sets are empty to avoid NaN.
+    """
     intersection = len(set1.intersection(set2))
     union = len(set1.union(set2))
-    return intersection / union if union > 0 else 0
+    return float(intersection / union) if union > 0 else 0.0
 
-def safe_modularity(G):
+def safe_modularity(G: nx.Graph) -> float:
     """
     Calculate network modularity with safety checks.
     Modularity is unreliable or undefined for very small or disconnected graphs.
     """
     if G.number_of_nodes() < 10 or G.number_of_edges() < 5:
         print("Modularity unreliable: graph too small. Skipping.")
-        return None
+        return 0.0
     comms = list(nx.algorithms.community.greedy_modularity_communities(G))
     if len(comms) < 2:
         print("Modularity unreliable: fewer than 2 communities.")
-        return None
-    return nx.algorithms.community.modularity(G, comms)
+        return 0.0
+    return float(nx.algorithms.community.modularity(G, comms))
 
-def safe_algebraic_connectivity(G):
+def safe_algebraic_connectivity(G: nx.Graph) -> float:
     """
     Calculate the Fiedler value (second smallest Laplacian eigenvalue).
-    It measures the algebraic connectivity of the graph. Returns 0 if disconnected.
+    It measures the algebraic connectivity of the graph. Returns 0.0 if disconnected.
     """
     try:
         if G.number_of_nodes() < 2 or G.number_of_edges() == 0:
             return 0.0
-        return nx.algebraic_connectivity(G)
+        return float(nx.algebraic_connectivity(G))
     except Exception:
         return 0.0
 
-def track_gcc_decay(graph, removal_order, N_global):
+def track_gcc_decay(graph: nx.Graph, removal_order: List, N_global: int) -> List[float]:
     """
     Simulate node removal and track the relative GCC size at each step.
     Used to measure network robustness against targeted or random failures.
@@ -161,7 +173,7 @@ def track_gcc_decay(graph, removal_order, N_global):
         gcc_sizes.append(get_gcc_size(G_sim, N_global))
     return gcc_sizes
 
-def robustness_curve_ensemble(graph, N_global, num_sims=100):
+def robustness_curve_ensemble(graph: nx.Graph, N_global: int, num_sims: int = 100) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate robustness curves for targeted attacks (by degree) and random failures.
     Returns the fractional nodes removed (x-axis) vs. relative GCC size (y-axis).
