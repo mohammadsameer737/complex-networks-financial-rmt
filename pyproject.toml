@@ -29,6 +29,7 @@ dependencies = [
     "pandas>=2.0.0",
     "scipy>=1.10.0",
     "networkx>=3.0",
+    "yfinance>=0.2.0",
 ]
 
 [project.optional-dependencies]
