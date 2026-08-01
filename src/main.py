@@ -9,12 +9,12 @@ from scipy.linalg import eigh
 from scipy import integrate
 
 # Import custom modules
-from src.finnet_backbone.data_loader import load_market_data
-from src.finnet_backbone.rmt import mp_null_lambda_plus, identify_sector_modes
-from src.finnet_backbone.backbone import (disparity_filter_naive, disparity_null_fp_rate, bootstrap_backbone_prices,
+from finnet_backbone.data_loader import load_market_data
+from finnet_backbone.rmt import mp_null_lambda_plus, identify_sector_modes
+from finnet_backbone.backbone import (disparity_filter_naive, disparity_null_fp_rate, bootstrap_backbone_prices,
                           get_gcc_size, jaccard, safe_modularity, safe_algebraic_connectivity,
                           track_gcc_decay, robustness_curve_ensemble)
-from src.finnet_backbone.visualization import (plot_ipr, plot_parameter_sweep, plot_er_phase_transition,
+from finnet_backbone.visualization import (plot_ipr, plot_parameter_sweep, plot_er_phase_transition,
                                plot_jaccard_overlap, plot_backbone_comparison,
                                plot_perturbation_analysis, plot_robustness_comparison,
                                plot_rmt_spectrum, plot_network_backbone,
@@ -23,10 +23,14 @@ from src.finnet_backbone.visualization import (plot_ipr, plot_parameter_sweep, p
 np.random.seed(42)
 random.seed(42)
 
+# ==============================================================================
 # 1. Data Pipeline
+# ==============================================================================
 data, effective_tickers, ticker_sectors, N_global, mapping = load_market_data()
 
-# 2. Log-returns and correlation
+# ==============================================================================
+# 2. Log-returns and Correlation Matrix
+# ==============================================================================
 log_returns = np.log(data / data.shift(1)).dropna()
 T, N = log_returns.shape
 Q = T / N
@@ -34,9 +38,13 @@ print(f"Time Steps (T): {T} | Aspect Ratio (Q = T/N): {Q:.2f}")
 
 rho_matrix = log_returns.corr(method="pearson")
 rho_clipped = np.clip(rho_matrix.values, -1.0, 1.0)
+# Convert correlation to metric distance: d = sqrt(2 * (1 - rho))
 distance_matrix = np.sqrt(2 * (1 - rho_clipped))
 
-# 3. RMT and Market Mode cleaning
+# ==============================================================================
+# 3. RMT and Market Mode Cleaning
+# ==============================================================================
+# Diagonalize correlation matrix to isolate eigenmodes
 eigvals, eigvecs = np.linalg.eigh(rho_matrix.values)
 idx = np.argsort(eigvals)[::-1]
 eigvals_sorted = eigvals[idx]
@@ -44,9 +52,13 @@ eigvecs_sorted = eigvecs[:, idx]
 
 lambda_1 = eigvals_sorted[0]
 market_vec = eigvecs_sorted[:, 0]
+
+# Project out the dominant market mode to isolate idiosyncratic, sector-specific correlations
 market_proj = log_returns.values.dot(market_vec)[:, None] * market_vec[None, :]
 residuals = log_returns.values - market_proj
 residuals = (residuals - residuals.mean(axis=0)) / (residuals.std(axis=0, ddof=1) + 1e-12)
+
+# Compute residual correlation matrix and its spectrum
 C_res = np.corrcoef(residuals, rowvar=False)
 eigvals_res, eigvecs_res = np.linalg.eigh(C_res)
 idx_res = np.argsort(eigvals_res)[::-1]
@@ -60,6 +72,7 @@ sigma_sq = 1.0
 lambda_minus = sigma_sq * (1 - 1.0 / np.sqrt(Q))**2 if Q > 1 else 0.0
 lambda_plus = sigma_sq * (1 + 1.0 / np.sqrt(Q))**2 if Q > 1 else np.max(eigvals_res_sorted) * 1.1
 
+# Empirical validation of Marchenko-Pastur upper bound
 null_max = mp_null_lambda_plus(T_eff, N_eff, n_sims=200)
 emp_pval_lambda_plus = (null_max >= lambda_plus).sum() / null_max.size
 sector_indices = [i for i in range(1, len(eigvals_res_sorted)) if eigvals_res_sorted[i] > lambda_plus]
@@ -69,6 +82,7 @@ print(f"Market Mode: λ1 = {lambda_1:.4f} (Absorbs {(lambda_1/N)*100:.2f}% of To
 print(f"Significant Sector Modes Detected: {len(sector_indices)}")
 print(f"MP null test: empirical p-value for λ+ = {emp_pval_lambda_plus:.3f}")
 
+# Validate i.i.d. Gaussian assumption required for strict RMT applicability
 kurtosis_vals = log_returns.kurtosis(axis=0)
 print(f"\nRMT Assumption Check:")
 print(f"Mean excess kurtosis: {kurtosis_vals.mean():.3f} (Gaussian = 0)")
@@ -80,17 +94,21 @@ print(f"Mean lag-1 autocorrelation: {acf_lag1.mean():.4f} (i.i.d. = 0)")
 if np.abs(kurtosis_vals.mean()) > 1 or np.abs(acf_lag1.mean()) > 0.05:
     print("WARNING: Returns deviate from i.i.d. Gaussian assumption. RMT bounds may be approximate.")
 
+# Inverse Participation Ratio (IPR) to measure eigenvector localization
 IPR = np.sum(eigvecs_sorted**4, axis=0)
 plot_ipr(IPR, N, sector_indices)
 
 identify_sector_modes(eigvals_res_sorted, eigvecs_res_sorted, sector_indices, ticker_sectors, effective_tickers)
 
-# 4. Disparity Filter
+# ==============================================================================
+# 4. Disparity Filter Backbone Extraction
+# ==============================================================================
 print("\n--- SENSITIVITY ANALYSIS ---")
 W_pure = np.abs(rho_matrix.values)
 np.fill_diagonal(W_pure, 0.0)
 alphas = np.linspace(0.01, 0.20, 25)
 gcc_vals, mod_vals = [], []
+
 for a in alphas:
     backbone_temp, pvals_temp = disparity_filter_naive(W_pure, alpha=a)
     G_temp = nx.from_numpy_array(backbone_temp)
@@ -113,6 +131,8 @@ G_backbone.remove_nodes_from(list(nx.isolates(G_backbone)))
 fp_mean, fp_std = disparity_null_fp_rate(log_returns, n_sims=50, alpha=0.05)
 print(f"Disparity null edges (mean ± std) at alpha=0.05: {fp_mean:.1f} ± {fp_std:.1f}")
 
+# Apply Benjamini-Hochberg False Discovery Rate (FDR) correction to control 
+# the expected proportion of false positives across all edge hypothesis tests.
 try:
     from statsmodels.stats.multitest import multipletests
     iu = np.triu_indices_from(pvals_matrix, k=1)
@@ -146,6 +166,8 @@ except ModuleNotFoundError:
 except Exception as e:
     print(f"FDR correction failed: {e}")
 
+# Fallback mechanism: if the strict alpha=0.05 filter collapses the network, 
+# apply a pre-filtered threshold to ensure a viable backbone for downstream topological analysis.
 G_temp = nx.from_numpy_array(backbone_np)
 if G_temp.number_of_edges() < 15:
     print("\n[WARNING] Pure filter yielded too few edges. Reverting to optimal sweep parameters.")
@@ -160,7 +182,9 @@ print(f"\nFinal Disparity Filter Backbone: {G_backbone.number_of_edges()} edges 
 print(f"Nodes in Backbone: {G_backbone.number_of_nodes()}")
 print(f"Network Density: {nx.density(G_backbone):.4f}")
 
-# 4.6 Baseline graphs
+# ==============================================================================
+# 4.6 Baseline Graphs for Comparison
+# ==============================================================================
 G_full_dist = nx.from_numpy_array(distance_matrix)
 G_full_dist = nx.relabel_nodes(G_full_dist, mapping)
 mst = nx.minimum_spanning_tree(G_full_dist, weight='weight')
@@ -175,6 +199,7 @@ G_thresh.remove_nodes_from(list(nx.isolates(G_thresh)))
 
 print(f"MST Edges: {mst.number_of_edges()} | Global Threshold Edges: {G_thresh.number_of_edges()}")
 
+# Temporal stability assessment via block bootstrap
 block_sizes = [1, 5, 10]
 bootstrap_summary = {}
 for bs in block_sizes:
@@ -187,6 +212,9 @@ survival = survival_bs
 stable_edges_50 = [e for e, f in survival.items() if f > 0.5]
 stable_edges_75 = [e for e, f in survival.items() if f > 0.75]
 
+# ==============================================================================
+# 5. Erdős-Rényi Phase Transition Baseline
+# ==============================================================================
 print("\n--- ERDŐS-RÉNYI PHASE TRANSITION ---")
 N_er = 500
 p_values = np.linspace(0.001, 0.01, 50)
@@ -201,7 +229,9 @@ for p in p_values:
 
 plot_er_phase_transition(p_values, gcc_er, N_er)
 
-# 5. Robustness and GCC analysis
+# ==============================================================================
+# 6. Robustness and GCC Analysis
+# ==============================================================================
 initial_gcc = get_gcc_size(G_backbone, N_global)
 print(f"Initial Backbone GCC Size: {initial_gcc * 100:.2f}% of the global network.")
 
@@ -218,7 +248,6 @@ for i, (name1, set1) in enumerate(methods.items()):
 print("\nJACCARD EDGE OVERLAP MATRIX:")
 print(pd.DataFrame(overlap_matrix, index=methods.keys(), columns=methods.keys()).round(3))
 plot_jaccard_overlap(overlap_matrix, methods)
-
 plot_backbone_comparison(mst, G_thresh, G_backbone, corr_threshold)
 
 mod_score = safe_modularity(G_backbone)
@@ -238,6 +267,7 @@ except Exception:
 print(f"MST Modularity: {mst_mod:.4f}")
 print(f"Threshold Modularity: {thresh_mod:.4f}")
 
+# Null model validation: configuration model preserving degree sequence
 null_mods = []
 for _ in range(100):
     degs = [d for n, d in G_backbone.degree()]
@@ -257,6 +287,7 @@ if null_mods:
     print(f"Null model modularity: {null_mean:.4f} +/- {null_std:.4f}")
     print(f"Modularity Z-score: {z_score:.2f}")
 
+# Bootstrap confidence intervals for modularity
 mod_boot = []
 for _ in range(100):
     idx = np.random.choice(T, size=T, replace=True)
@@ -277,13 +308,14 @@ for _ in range(100):
             c_s = list(nx.algorithms.community.greedy_modularity_communities(G_s))
             mod_val = nx.algorithms.community.modularity(G_s, c_s)
             mod_boot.append(mod_val)
-        except:
+        except Exception:
             pass
 
 if mod_boot:
     ci = np.percentile(mod_boot, [2.5, 97.5])
     print(f"Modularity 95% CI: [{ci[0]:.4f}, {ci[1]:.4f}]")
 
+# Spectral analysis of the Laplacian
 if G_backbone.number_of_nodes() > 0:
     L_full = nx.laplacian_matrix(G_backbone).toarray()
     eig_L_full = np.sort(eigh(L_full, eigvals_only=True))
@@ -306,6 +338,9 @@ print(f"Backbone Laplacian zero eigenvalue multiplicity: {zero_mult}")
 print(f"Backbone Algebraic Connectivity (GCC local Fiedler λ2): {fiedler_gcc:.4f}")
 print(f"Comparison Fiedler Values -> MST: {fiedler_mst:.4f} | Threshold: {fiedler_thresh:.4f} | Disparity (GCC): {fiedler_gcc:.4f}")
 
+# ==============================================================================
+# 7. Perturbation Analysis and Fragility Thresholds
+# ==============================================================================
 degrees = dict(G_backbone.degree())
 targeted_order = sorted(degrees.keys(), key=lambda x: degrees[x], reverse=True)
 gcc_targeted = track_gcc_decay(G_backbone, targeted_order, N_global)
@@ -326,6 +361,7 @@ std_gcc_random = np.std(ensemble_random_curves, axis=0)
 x_axis_targeted = np.linspace(0, len(targeted_order) / N_global, len(gcc_targeted))
 x_axis_random = np.linspace(0, len(nodes_list) / N_global, len(mean_gcc_random))
 
+# Calculate Area Under the Curve (AUC) for robustness. Higher AUC = greater resilience.
 auc_targeted = integrate.trapezoid(gcc_targeted, x_axis_targeted)
 auc_random = integrate.trapezoid(mean_gcc_random, x_axis_random)
 
@@ -357,11 +393,15 @@ x_tt, t_t, x_rt, r_t_mean, r_t_std = robustness_curve_ensemble(G_thresh, N_globa
 
 plot_robustness_comparison(x_td, t_d, x_rd, r_d_mean, r_d_std, x_tm, t_m, x_rm, r_m_mean, r_m_std, x_tt, t_t, x_rt, r_t_mean, r_t_std)
 
-# 6. Final visualizations
+# ==============================================================================
+# 8. Final Visualizations
+# ==============================================================================
 plot_rmt_spectrum(eigvals_res_sorted, lambda_minus, lambda_plus, Q, sigma_sq)
 plot_network_backbone(G_backbone, ticker_sectors)
 
-# 7. Temporal Network Analysis
+# ==============================================================================
+# 9. Temporal Network Analysis
+# ==============================================================================
 print("\n--- STARTING TEMPORAL NETWORK ANALYSIS ---")
 window_size = 252 
 step_size = 21 

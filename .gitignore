@@ -43,3 +43,9 @@ results/*.json
 # OS files
 .DS_Store
 Thumbs.db
+# Ignore root-level generated artifacts
+/.coverage
+/Network_Backbone.png
+/Perturbation_Analysis.png
+/RMT_Spectrum.png
+/sp500_10yr_cache.csv

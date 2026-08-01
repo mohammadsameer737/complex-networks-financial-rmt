@@ -13,13 +13,11 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 
-# Ensure local modules can be imported
-sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+from finnet_backbone.data_loader import load_market_data
+from finnet_backbone.rmt import mp_null_lambda_plus
+from finnet_backbone.backbone import disparity_filter_naive, robustness_curve_ensemble
+from finnet_backbone.visualization import plot_rmt_spectrum, plot_network_backbone, plot_perturbation_analysis
 
-from src.finnet_backbone.data_loader import load_market_data
-from src.finnet_backbone.rmt import mp_null_lambda_plus
-from src.finnet_backbone.backbone import disparity_filter_naive, robustness_curve_ensemble
-from src.finnet_backbone.visualization import plot_rmt_spectrum, plot_network_backbone, plot_perturbation_analysis
 
 def run_pipeline():
     print("="*60)
