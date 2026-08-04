@@ -6,6 +6,25 @@ import numpy as np
 import networkx as nx
 
 
+def _single_bootstrap_worker(args):
+    """
+    Worker function for parallel bootstrap resampling.
+    Must be defined at the module level to be picklable by multiprocessing on Windows.
+    """
+    rep, weight_matrix, alpha, block_size, n_blocks = args
+    np.random.seed(rep)
+    
+    # Simplified: just perturb the weights slightly to simulate bootstrap variance
+    noise = np.random.normal(0, 0.01, weight_matrix.shape)
+    W_perturbed = weight_matrix + noise
+    W_perturbed = (W_perturbed + W_perturbed.T) / 2
+    np.fill_diagonal(W_perturbed, 0.0)
+    
+    # Re-use the vectorized filter
+    backbone, _ = disparity_filter_vectorized(W_perturbed, alpha=alpha)
+    return (backbone > 0).astype(float)
+
+
 def disparity_filter_vectorized(weight_matrix, alpha=0.05):
     """
     Extract the multiscale backbone using a vectorized Disparity Filter.
@@ -75,25 +94,19 @@ def bootstrap_parallel(weight_matrix, alpha=0.05, n_reps=200, block_size=5):
     """
     from multiprocessing import Pool, cpu_count
     
-    T = weight_matrix.shape[0]  # Using matrix size as proxy for time steps
+    T = weight_matrix.shape[0]
     n_blocks = max(1, T // block_size)
     
-    def single_bootstrap(rep):
-        np.random.seed(rep)
-        # Resample with replacement at block level
-        block_indices = np.random.choice(n_blocks, size=n_blocks, replace=True)
-        # Simplified: just perturb the weights slightly
-        noise = np.random.normal(0, 0.01, weight_matrix.shape)
-        W_perturbed = weight_matrix + noise
-        W_perturbed = (W_perturbed + W_perturbed.T) / 2
-        np.fill_diagonal(W_perturbed, 0.0)
-        
-        backbone, _ = disparity_filter_vectorized(W_perturbed, alpha=alpha)
-        return (backbone > 0).astype(float)
+    # Prepare arguments for the worker function
+    # We pass a tuple of arguments because multiprocessing.map only takes one iterable
+    worker_args = [
+        (rep, weight_matrix, alpha, block_size, n_blocks) 
+        for rep in range(n_reps)
+    ]
     
     n_cores = min(cpu_count(), 4)
     with Pool(processes=n_cores) as pool:
-        results = pool.map(single_bootstrap, range(n_reps))
+        results = pool.map(_single_bootstrap_worker, worker_args)
     
     survival_probs = np.mean(results, axis=0)
     return survival_probs
