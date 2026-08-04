@@ -1,7 +1,11 @@
 import numpy as np
 import networkx as nx
 import pytest
-from finnet_backbone.backbone import disparity_filter_naive, get_gcc_size
+from finnet_backbone.backbone import (
+    disparity_filter_naive, get_gcc_size, jaccard, 
+    safe_modularity, safe_algebraic_connectivity, 
+    track_gcc_decay, robustness_curve_ensemble
+)
 
 class TestDisparityFilter:
     """Tests for the Disparity Filter backbone extraction algorithm."""
@@ -79,3 +83,73 @@ class TestNetworkMetrics:
         G.add_nodes_from(range(10))
         gcc_size = get_gcc_size(G, N_global=10)
         assert np.isclose(gcc_size, 0.1)
+
+
+class TestTopologicalMetrics:
+    """Tests for spectral graph theory and topological overlap metrics."""
+
+    def test_jaccard_coefficient_identical_sets(self):
+        """
+        Verifies that the Jaccard index between two identical sets of edges 
+        is exactly 1.0 (perfect overlap).
+        """
+        edges = {(1, 2), (2, 3), (3, 4)}
+        assert jaccard(edges, edges) == 1.0
+
+    def test_jaccard_coefficient_disjoint_sets(self):
+        """
+        Verifies that the Jaccard index between two completely disjoint 
+        sets of edges is 0.0.
+        """
+        set1 = {(1, 2), (2, 3)}
+        set2 = {(4, 5), (5, 6)}
+        assert jaccard(set1, set2) == 0.0
+
+    def test_safe_modularity_small_graph(self):
+        """
+        Verifies that safe_modularity returns 0.0 for graphs too small 
+        to reliably compute community structure (N < 10 or E < 5).
+        """
+        G = nx.complete_graph(5)  # Too small
+        assert safe_modularity(G) == 0.0
+
+    def test_safe_algebraic_connectivity_disconnected(self):
+        """
+        Verifies that the Fiedler value (algebraic connectivity) is 0.0 
+        for a disconnected graph, as the Laplacian has multiple zero eigenvalues.
+        """
+        G = nx.Graph()
+        G.add_edge(1, 2)
+        G.add_edge(3, 4)  # Disconnected component
+        assert safe_algebraic_connectivity(G) == 0.0
+
+
+class TestNetworkRobustness:
+    """Tests for network perturbation and fragility analysis."""
+
+    def test_track_gcc_decay_targeted_attack(self):
+        """
+        Verifies that removing hub nodes (highest degree) from a star graph 
+        immediately collapses the GCC size to 0.0 (or 1/N for the isolated center).
+        """
+        G = nx.star_graph(10)  # 1 hub, 10 leaves
+        removal_order = [0]  # Remove the hub first
+        gcc_sizes = track_gcc_decay(G, removal_order, N_global=11)
+        
+        # Initial GCC is 1.0, after removing hub it drops significantly
+        assert gcc_sizes[0] == 1.0
+        assert gcc_sizes[1] < 0.5  # Collapses
+
+    def test_robustness_curve_ensemble_shapes(self):
+        """
+        Verifies that the robustness curve ensemble returns correctly shaped 
+        arrays for both targeted attacks and random failures.
+        """
+        G = nx.erdos_renyi_graph(50, 0.2)
+        x_t, y_t, x_r, y_r_mean, y_r_std = robustness_curve_ensemble(G, N_global=50, num_sims=10)
+        
+        # Arrays must be non-empty and x-axis must be normalized [0, 1]
+        assert len(x_t) > 0
+        assert len(y_t) > 0
+        assert np.max(x_t) <= 1.0
+        assert np.max(x_r) <= 1.0
