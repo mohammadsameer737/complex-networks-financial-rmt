@@ -1,3 +1,14 @@
+"""
+Visualization module for financial network analysis.
+
+Provides publication-quality plotting functions for:
+- Random Matrix Theory (RMT) spectrum and Inverse Participation Ratio (IPR).
+- Disparity Filter backbone extraction and parameter sweeps.
+- Network robustness (targeted attacks vs. random failures).
+- Temporal evolution of community structure and centrality.
+
+All plots are saved to the current directory with high DPI (300) for inclusion in technical reports.
+"""
 import matplotlib.pyplot as plt
 import seaborn as sns
 import networkx as nx
@@ -5,7 +16,18 @@ import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
 
+
 def plot_ipr(IPR, N, sector_indices):
+    """
+    Plot the Inverse Participation Ratio (IPR) to visualize eigenvector localization.
+    
+    The IPR measures how localized an eigenvector is. A delocalized eigenvector 
+    (uniform across all assets) has IPR ≈ 1/N, while a localized eigenvector 
+    (concentrated on a few assets) has IPR >> 1/N. This plot identifies the 
+    market mode (index 0) and sector modes (indices > 0) that deviate from 
+    the theoretical delocalization line, confirming they contain genuine 
+    economic signal rather than random noise.
+    """
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(range(1, N+1), IPR, 'o-', ms=4, color='teal', label='Empirical IPR')
     ax.axhline(1/N, color='red', linestyle='--', lw=2, label=f'Theoretical Delocalization (1/N = {1/N:.3f})')
@@ -20,7 +42,15 @@ def plot_ipr(IPR, N, sector_indices):
     plt.savefig('IPR_Analysis.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_parameter_sweep(alphas, gcc_vals, mod_vals):
+    """
+    Plot network sensitivity to the Disparity Filter significance threshold (α).
+    
+    Shows the trade-off between network connectivity (GCC size) and community 
+    structure (Modularity). A lower α retains only the strongest, most statistically 
+    significant edges, often fragmenting the network but revealing tight communities.
+    """
     fig, ax1 = plt.subplots(figsize=(8, 5))
     ax1.plot(alphas, gcc_vals, 'g-o', label='GCC Size', linewidth=2)
     ax1.set_xlabel('Significance Threshold ($\\alpha$)', fontsize=12)
@@ -36,7 +66,15 @@ def plot_parameter_sweep(alphas, gcc_vals, mod_vals):
     plt.savefig('Parameter_Sweep_Alpha.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_er_phase_transition(p_values, gcc_er, N_er):
+    """
+    Plot the Erdős-Rényi phase transition as a baseline for random graph connectivity.
+    
+    Demonstrates the critical threshold p_c = 1/N, below which the graph is fragmented 
+    and above which a Giant Connected Component (GCC) abruptly emerges. This provides 
+    a null model to contrast with the robust, heterogeneous structure of financial networks.
+    """
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(p_values, gcc_er, 'b-', linewidth=2)
     ax.axvline(x=1/N_er, color='r', linestyle='--', label=f'Critical p_c = 1/N = {1/N_er:.4f}')
@@ -48,7 +86,15 @@ def plot_er_phase_transition(p_values, gcc_er, N_er):
     plt.savefig('ER_Phase_Transition.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_jaccard_overlap(overlap_matrix, methods):
+    """
+    Plot a heatmap of the Jaccard edge overlap between different backbone extraction methods.
+    
+    Quantifies topological similarity. A low Jaccard index between MST and Disparity Filter 
+    proves that the Disparity Filter retains crucial local heterogeneity (cycles, communities) 
+    that the tree-constrained MST discards.
+    """
     fig, ax = plt.subplots(figsize=(6, 5))
     sns.heatmap(overlap_matrix, annot=True, fmt=".3f", cmap='Blues',
                 xticklabels=list(methods.keys()), yticklabels=list(methods.keys()), ax=ax)
@@ -57,7 +103,17 @@ def plot_jaccard_overlap(overlap_matrix, methods):
     plt.savefig('Jaccard_Overlap.png', dpi=300)
     plt.show()
 
+
 def plot_backbone_comparison(mst, G_thresh, G_backbone, corr_threshold):
+    """
+    Generate a 4-panel composite figure comparing network topologies.
+    
+    Visualizes the structural differences between:
+    1. MST (drastic, no cycles, connects all nodes minimally)
+    2. Global Threshold (arbitrary cutoff, retains dense clusters)
+    3. Disparity Filter (multiscale, preserves local heterogeneity)
+    4. Degree distribution (log-log scale) to highlight scale-free properties.
+    """
     fig = plt.figure(figsize=(18, 12))
     fig.suptitle("Backbone Extraction Comparison: Topology & Metrics", fontsize=16, fontweight='bold')
     seed = 42
@@ -92,7 +148,15 @@ def plot_backbone_comparison(mst, G_thresh, G_backbone, corr_threshold):
     plt.savefig('Backbone_Comparison_Composite.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_perturbation_analysis(x_axis_targeted, gcc_targeted, x_axis_random, mean_gcc_random, std_gcc_random):
+    """
+    Plot network robustness curves under targeted attacks vs. random failures.
+    
+    Targeted attacks remove hubs (highest degree), while random failures remove nodes uniformly.
+    Financial networks are typically robust to random failures but highly fragile to targeted 
+    attacks on systemic hubs. The shaded region represents ±1 standard deviation of the ensemble.
+    """
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(x_axis_targeted, gcc_targeted, 'r-', lw=2.5, label='Targeted Attack (Highest Degree First)')
     ax.plot(x_axis_random, mean_gcc_random, 'b-', lw=2.5, label='Random Failure (Ensemble Mean)')
@@ -108,7 +172,14 @@ def plot_perturbation_analysis(x_axis_targeted, gcc_targeted, x_axis_random, mea
     plt.savefig('Perturbation_Analysis.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_robustness_comparison(x_td, t_d, x_rd, r_d_mean, r_d_std, x_tm, t_m, x_rm, r_m_mean, r_m_std, x_tt, t_t, x_rt, r_t_mean, r_t_std):
+    """
+    Compare systemic robustness across three backbone extraction methods.
+    
+    Overlays targeted and random failure curves for Disparity, MST, and Threshold networks 
+    to demonstrate which method yields the most resilient topological structure.
+    """
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(x_td, t_d, 'g-', lw=2, label='Disparity (Targeted)')
     ax.plot(x_rd, r_d_mean, 'g--', lw=2, label='Disparity (Random Mean)')
@@ -129,7 +200,15 @@ def plot_robustness_comparison(x_td, t_d, x_rd, r_d_mean, r_d_std, x_tm, t_m, x_
     plt.savefig('Robustness_Comparison.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_rmt_spectrum(eigvals_res_sorted, lambda_minus, lambda_plus, Q, sigma_sq):
+    """
+    Plot the empirical eigenvalue spectrum against the theoretical Marchenko-Pastur distribution.
+    
+    The histogram shows the residual correlation matrix eigenvalues after removing the market mode.
+    The red curve is the theoretical MP density. Eigenvalues protruding beyond λ+ represent 
+    genuine macroeconomic sector modes, while those within the bulk are consistent with random noise.
+    """
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.hist(eigvals_res_sorted[1:], bins=30, density=True, alpha=0.6, color='steelblue', label='Empirical Noise Bulk')
     x_mp = np.linspace(lambda_minus, lambda_plus, 200)
@@ -145,7 +224,16 @@ def plot_rmt_spectrum(eigvals_res_sorted, lambda_minus, lambda_plus, Q, sigma_sq
     plt.savefig('RMT_Spectrum.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_network_backbone(G_backbone, ticker_sectors):
+    """
+    Plot the financial correlation backbone with nodes colored by GICS economic sector.
+    
+    Visualizes the community structure extracted by the Disparity Filter. 
+    Nodes belonging to the same economic sector (e.g., Financials, Technology) 
+    should cluster together, proving that the backbone captures genuine 
+    macroeconomic sector correlations rather than random noise.
+    """
     fig, ax = plt.subplots(figsize=(13, 9))
     unique_sectors = sorted(list(set(ticker_sectors.values())))
     color_palette = sns.color_palette("Set1", len(unique_sectors))
@@ -164,7 +252,15 @@ def plot_network_backbone(G_backbone, ticker_sectors):
     plt.savefig('Network_Backbone.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_temporal_evolution(time_windows, modularities_over_time, largest_comm_sizes_over_time):
+    """
+    Plot the temporal evolution of community structure over rolling time windows.
+    
+    Tracks Modularity and Largest Community Fraction over time to identify 
+    periods of market stress (where communities fragment or merge rapidly) 
+    versus periods of stable economic clustering.
+    """
     fig, ax1 = plt.subplots(figsize=(12,6))
     ax1.plot(time_windows, modularities_over_time, 'b-o', markersize=4)
     ax1.set_xlabel('Time Window End')
@@ -177,7 +273,15 @@ def plot_temporal_evolution(time_windows, modularities_over_time, largest_comm_s
     plt.savefig('Temporal_Evolution_Communities.png', dpi=300, bbox_inches='tight')
     plt.show()
 
+
 def plot_temporal_centrality(centralities_over_time):
+    """
+    Plot a heatmap of the top central firms (highest eigenvector centrality) over time.
+    
+    Identifies which specific assets act as systemic hubs during different market regimes.
+    Shifts in the heatmap reveal how systemic risk migrates between sectors 
+    (e.g., from Financials during a banking crisis to Technology during a tech boom).
+    """
     all_top_nodes = set()
     for entry in centralities_over_time:
         for date, top_nodes in entry.items():
